@@ -1,0 +1,163 @@
+[{
+    "title": "Basic Configuration",
+    "properties": [{
+        "name": "processingMode",
+        "label": "Processing Mode",
+        "type": "selectbox",
+        "value": "automatic",
+        "options": [{
+            "value": "automatic",
+            "label": "Automatic - Process All Unsettled"
+        }, {
+            "value": "manual",
+            "label": "Manual Review Mode"
+        }],
+        "description": "Processing mode for transaction pairing"
+    }]
+}, {
+    "title": "Pairing Configuration",
+    "properties": [{
+        "name": "amountTolerance",
+        "label": "Amount Tolerance (%)",
+        "type": "textfield",
+        "value": "0.1",
+        "description": "Maximum percentage difference allowed for amount matching",
+        "regex_validation": "^[0-9]+(\\.[0-9]+)?$",
+        "validation_message": "Please enter a valid decimal number"
+    }, {
+        "name": "maxSettlementDays",
+        "label": "Maximum Settlement Days",
+        "type": "selectbox",
+        "value": "3",
+        "options": [{
+            "value": "1",
+            "label": "T+1"
+        }, {
+            "value": "2",
+            "label": "T+2"
+        }, {
+            "value": "3",
+            "label": "T+3"
+        }, {
+            "value": "5",
+            "label": "T+5"
+        }],
+        "description": "Maximum days between trade and settlement"
+    }, {
+        "name": "enableFeeDetection",
+        "label": "Enable Fee Detection",
+        "type": "checkbox",
+        "value": "true",
+        "options": [{
+            "value": "true",
+            "label": ""
+        }],
+        "description": "Automatically detect and pair fee transactions"
+    }, {
+        "name": "confidenceThreshold",
+        "label": "Confidence Threshold (%)",
+        "type": "textfield",
+        "value": "80",
+        "description": "Minimum confidence level for automatic pairing",
+        "regex_validation": "^[0-9]+$",
+        "validation_message": "Please enter a valid percentage (0-100)"
+    }]
+}, {
+    "title": "Pipeline Configuration",
+    "properties": [{
+        "name": "stopOnError",
+        "label": "Stop on Error",
+        "type": "checkbox",
+        "value": "false",
+        "options": [{
+            "value": "true",
+            "label": ""
+        }],
+        "description": "Stop processing if any transaction fails"
+    }, {
+        "name": "persistPairs",
+        "label": "Persist Pairing Results",
+        "type": "checkbox",
+        "value": "true",
+        "options": [{
+            "value": "true",
+            "label": ""
+        }],
+        "description": "Save pairing results to database"
+    }, {
+        "name": "enableValidation",
+        "label": "Enable Validation",
+        "type": "checkbox",
+        "value": "true",
+        "options": [{
+            "value": "true",
+            "label": ""
+        }],
+        "description": "Run validation step after pairing"
+    }, {
+        "name": "updateEnrichmentStatus",
+        "label": "Update Enrichment Status",
+        "type": "checkbox",
+        "value": "true",
+        "options": [{
+            "value": "true",
+            "label": ""
+        }],
+        "description": "Update status in enrichment table after processing"
+    }]
+}, {
+    "title": "Advanced Settings",
+    "properties": [{
+        "name": "batchSize",
+        "label": "Batch Size",
+        "type": "textfield",
+        "value": "100",
+        "description": "Number of transactions to process in each batch",
+        "regex_validation": "^[0-9]+$",
+        "validation_message": "Please enter a valid number"
+    }, {
+        "name": "logLevel",
+        "label": "Logging Level",
+        "type": "selectbox",
+        "value": "INFO",
+        "options": [{
+            "value": "DEBUG",
+            "label": "Debug"
+        }, {
+            "value": "INFO",
+            "label": "Info"
+        }, {
+            "value": "WARN",
+            "label": "Warning"
+        }, {
+            "value": "ERROR",
+            "label": "Error"
+        }],
+        "description": "Level of detail for logging"
+    }, {
+        "name": "timeout",
+        "label": "Processing Timeout (seconds)",
+        "type": "textfield",
+        "value": "300",
+        "description": "Maximum time allowed for processing",
+        "regex_validation": "^[0-9]+$",
+        "validation_message": "Please enter a valid number of seconds"
+    }]
+}, {
+    "title": "Data Source Configuration",
+    "properties": [{
+        "name": "enrichmentTable",
+        "label": "Enrichment Table",
+        "type": "textfield",
+        "value": "trx_enrichment",
+        "description": "Form containing enriched transactions",
+        "readonly": "true"
+    }, {
+        "name": "pairsTable",
+        "label": "Pairs Table",
+        "type": "textfield",
+        "value": "trx_pair",
+        "description": "Form for storing pairing results",
+        "readonly": "true"
+    }]
+}]
