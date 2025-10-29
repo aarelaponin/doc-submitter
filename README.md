@@ -1,4 +1,8 @@
-# Document Submitter Plugin for Joget DX8
+# GovStack Document Submitter Plugin for Joget DX8
+
+**Version:** 8.1-SNAPSHOT
+**Package:** `global.govstack.registration.sender`
+**Architecture:** Multi-Service Support
 
 A Joget DX8 plugin for GovStack Registration Building Block that extracts form data, transforms it to GovStack JSON format, and sends it to the Processing API for registration.
 
@@ -6,19 +10,23 @@ A Joget DX8 plugin for GovStack Registration Building Block that extracts form d
 
 This plugin is the **sender component** in a two-part architecture:
 - **DocSubmitter** (this plugin) - Extracts Joget form data, transforms to GovStack JSON, sends to Processing API
-- **ProcessingAPI** (receiver) - Receives GovStack JSON, validates, maps to Joget forms, saves to database
+- **ProcessingServer** (receiver) - Receives GovStack JSON, maps to Joget forms, saves to database
+- **WorkflowActivator** (configuration) - Sets serviceId (single configuration point)
 
-Together they enable bidirectional data exchange between Joget instances using GovStack Registration Building Block standards.
+Together they enable data exchange between Joget instances using GovStack Registration Building Block standards.
+
+**Key Feature**: Reads serviceId from workflow variables (set by WorkflowActivator), enabling **one plugin to serve multiple services**.
 
 ## Features
 
-- **YAML-Driven Configuration** - All field mappings defined in `services.yml` (no code changes needed)
+- **Multi-Service Architecture** - One plugin serves multiple services (farmers, students, subsidies, etc.)
+- **ServiceId from Workflow** - Reads serviceId from workflow variables (set by WorkflowActivator)
+- **Convention-Based YAML Loading** - Automatically loads `{serviceId}.yml` configuration
+- **YAML-Driven Configuration** - All field mappings defined in YAML files (no code changes needed)
 - **Automatic Field Transformation** - Handles dates, numbers, checkboxes, master data lookups
-- **Grid/Subform Support** - Processes parent-child relationships (farmer → crops, livestock)
+- **Grid/Subform Support** - Processes parent-child relationships (parent → children grids)
 - **Field Normalization** - Converts yes/no ↔ 1/2 formats automatically
-- **Validation Rules** - Enforces conditional requirements via `validation-rules.yaml`
 - **Configuration Generators** - Auto-generate configuration from minimal hints (92% time savings)
-- **Multi-Service Support** - Deploy multiple services to same Joget instance
 - **Hot-Deployable** - OSGi bundle architecture, no server restart required
 
 ## Requirements
@@ -44,23 +52,45 @@ The compiled plugin will be available at `target/doc-submitter-8.1-SNAPSHOT.jar`
 
 ### 3. Configure in Workflow
 
-1. Add "GovStack Document Submitter" as a Tool in your workflow process
+**IMPORTANT**: ServiceId is configured in **WorkflowActivator**, not in DocSubmitter!
+
+1. Add "GovStack Document Submitter" as a Tool in your workflow process (e.g., `farmers_registry_submission`)
 2. Configure the plugin properties:
-   - **Processing API URL**: `http://receiver:8080/jw/api/govstack/v2/{serviceId}/applications`
-   - **Service ID**: `farmers_registry` (or your service ID from services.yml)
-   - **Form Structure Path**: `src/main/resources/docs-metadata/form_structure.yaml`
-   - **Services Config Path**: `src/main/resources/docs-metadata/services.yml`
-   - **Validation Rules Path**: `src/main/resources/docs-metadata/validation-rules.yaml`
+   - **API Endpoint**: `http://receiver:8080/jw/api` (base URL only, serviceId comes from workflow)
+   - **API ID**: (from receiver's API key)
+   - **API Key**: (from receiver's API key)
+   - **Extraction Mode**: Workflow Assignment (uses assignment context)
+   - **Validate Before Sending**: ✓ checked (recommended)
+   - **Update Workflow Status**: ✓ checked (recommended)
+
+**The plugin will automatically**:
+- Read `serviceId` from workflow variables (set by WorkflowActivator)
+- Load configuration from `{serviceId}.yml` (e.g., `farmers_registry.yml`)
+- Send to API endpoint: `/services/{serviceId}/applications`
+
+**For complete configuration, see [CONFIGURATION_GUIDE.md](../CONFIGURATION_GUIDE.md)**
 
 ## Configuration
 
-### Services Configuration (`services.yml`)
+### Multi-Service Architecture
 
-Single configuration file shared by both sender and receiver:
+**Key Concept**: One plugin JAR contains multiple YAML configuration files:
+- `farmers_registry.yml` - Configuration for farmers service
+- `subsidy_application.yml` - Configuration for subsidy service
+- `student_enrollment.yml` - Configuration for student service
+
+The plugin automatically loads the correct YAML based on `serviceId` from workflow variables.
+
+### Services Configuration (`{serviceId}.yml`)
+
+**File Location**: `src/main/resources/docs-metadata/{serviceId}.yml`
+**Naming Convention**: File name MUST match serviceId exactly
+
+**Example**: `farmers_registry.yml` (embedded in JAR)
 
 ```yaml
 service:
-  id: farmers_registry
+  id: farmers_registry  # MUST match file name
   name: Farmers Registry Service
 
 metadata:
@@ -79,6 +109,23 @@ formMappings:
         required: true
       - joget: first_name
         govstack: name.given[0]
+        required: true
+```
+
+**Example**: `subsidy_application.yml`
+
+```yaml
+service:
+  id: subsidy_application  # MUST match file name
+  name: Subsidy Application Service
+
+formMappings:
+  subsidyRequest:
+    formId: subsidyRequest
+    tableName: app_fd_subsidy_request
+    fields:
+      - joget: applicant_id
+        govstack: identifiers[0].value
         required: true
 ```
 
@@ -106,7 +153,7 @@ See [README-GENERATORS.md](README-GENERATORS.md) for details.
 
 ```
 doc-submitter/
-├── src/main/java/global/govstack/farmreg/registration/
+├── src/main/java/global/govstack/registration/sender/
 │   ├── lib/DocSubmitter.java                    # Main plugin - extracts & sends data
 │   ├── model/
 │   │   ├── MappingHints.java                    # Configuration model for generators
@@ -115,13 +162,15 @@ doc-submitter/
 │   │   ├── ServicesYamlGenerator.java           # Auto-generates services.yml
 │   │   └── ValidationRulesGenerator.java        # Auto-generates validation-rules.yaml
 │   ├── service/                                  # Business logic services
+│   │   └── metadata/
+│   │       └── YamlMetadataService.java         # Loads {serviceId}.yml dynamically
 │   └── exception/                                # Custom exceptions
 ├── src/main/resources/
 │   ├── properties/DocSubmitter.json              # Plugin UI configuration
 │   └── docs-metadata/
-│       ├── form_structure.yaml                   # Form metadata (extracted from Joget)
-│       ├── services.yml                          # Field mappings configuration
-│       └── validation-rules.yaml                 # Business validation rules
+│       ├── farmers_registry.yml                  # Farmers service configuration
+│       ├── subsidy_application.yml               # Subsidy service configuration (example)
+│       └── form_structure.yaml                   # Form metadata (optional, for generators)
 ├── templates/
 │   ├── mapping-hints-template.yaml               # Template for new services
 │   └── business-rules-template.yaml              # Template for validation rules
@@ -185,45 +234,67 @@ See [END_TO_END_SERVICE_CONFIGURATION.md](../END_TO_END_SERVICE_CONFIGURATION.md
 - **Patient Registration** - Healthcare registration with medical history
 - **Product Catalog** - Multi-category product management
 
-## Architecture
+## Architecture (Multi-Service)
 
 ```
-Sender (port 8080-2, DB 3307)          Receiver (port 8080-1, DB 3306)
-┌─────────────────────────┐           ┌─────────────────────────┐
-│  Joget Form Submission  │           │    Processing API       │
-│         ↓               │           │         ↓               │
-│    DocSubmitter         │           │   Validates JSON        │
-│    (this plugin)        │  HTTP     │         ↓               │
-│         ↓               │  POST     │   Maps to Joget         │
-│  Read services.yml      │  ────→    │         ↓               │
-│         ↓               │  JSON     │  Read services.yml      │
-│  Extract form data      │           │         ↓               │
-│         ↓               │           │  Save to database       │
-│  Transform to GovStack  │           │                         │
-│         ↓               │           │                         │
-│  Validate rules         │           │                         │
-│         ↓               │           │                         │
-│  Send HTTP POST         │           │                         │
-└─────────────────────────┘           └─────────────────────────┘
+Sender Joget Instance                Receiver Joget Instance
+┌──────────────────────────┐        ┌──────────────────────────┐
+│  Form Submission         │        │   ProcessingServer       │
+│         ↓                │        │         ↓                │
+│  WorkflowActivator       │        │   Extract serviceId      │
+│  (Post-Processing)       │        │   from URL path          │
+│  - Sets serviceId        │        │         ↓                │
+│  - Starts {serviceId}    │        │   Load {serviceId}.yml   │
+│    _submission process   │        │   (e.g., farmers_        │
+│         ↓                │        │    registry.yml)         │
+│  Process Started         │        │         ↓                │
+│  (serviceId in workflow) │  HTTP  │   Map GovStack JSON      │
+│         ↓                │  POST  │   to Joget forms         │
+│  DocSubmitter (Tool)     │  ────→ │         ↓                │
+│  - Reads serviceId from  │  JSON  │   Save to database       │
+│    workflow variables    │        │                          │
+│  - Loads {serviceId}.yml │        │                          │
+│  - Extracts form data    │        │                          │
+│  - Transforms to GovStack│        │                          │
+│  - Sends to /services/   │        │                          │
+│    {serviceId}/          │        │                          │
+│    applications          │        │                          │
+└──────────────────────────┘        └──────────────────────────┘
 
-      Both use SAME services.yml (single source of truth)
+ServiceId flows through entire chain:
+  WorkflowActivator config → Workflow variable → DocSubmitter → API URL → ProcessingServer
+
+Multiple services use SAME plugins with DIFFERENT {serviceId}.yml files
 ```
 
-## Multi-Service Deployment
+## Multi-Service Deployment (Single JAR Approach)
 
-Deploy multiple services to the same Joget instance by creating separate plugin projects:
+**Recommended**: Deploy ONE plugin JAR containing MULTIPLE YAML files:
 
 ```
-gs-plugins/
-├── doc-submitter-farmers/
-│   ├── pom.xml (artifactId: doc-submitter-farmers)
-│   └── src/main/resources/docs-metadata/services.yml (farmers_registry)
-├── doc-submitter-students/
-│   ├── pom.xml (artifactId: doc-submitter-students)
-│   └── src/main/resources/docs-metadata/services.yml (student_enrollment)
+doc-submitter-8.1-SNAPSHOT.jar
+├── (plugin code - generic)
+└── docs-metadata/
+    ├── farmers_registry.yml
+    ├── subsidy_application.yml
+    └── student_enrollment.yml
 ```
 
-Different artifactIds = different OSGi bundles = no conflicts.
+**Deployment Steps**:
+1. Add all `{serviceId}.yml` files to `src/main/resources/docs-metadata/`
+2. Build: `mvn clean package`
+3. Deploy ONE JAR to Joget
+4. Create separate workflows for each service:
+   - `farmers_registry_submission`
+   - `subsidy_application_submission`
+   - `student_enrollment_submission`
+5. Configure WorkflowActivator on each form with different serviceId
+
+**Benefits**:
+- Single plugin to maintain and deploy
+- All services share the same codebase
+- Easy to add new services (just add YAML + create process)
+- No OSGi bundle conflicts
 
 ## Testing
 
@@ -244,22 +315,68 @@ mvn test
 
 ## Troubleshooting
 
+### "ServiceId not found in workflow variables"
+**Cause:** WorkflowActivator not configured or didn't execute
+**Solution:**
+- Verify form has WorkflowActivator in Post-Processing
+- Check WorkflowActivator configuration has serviceId set
+- Check WorkflowActivator logs to confirm it executed
+- See [CONFIGURATION_GUIDE.md](../CONFIGURATION_GUIDE.md#troubleshooting)
+
+### "Metadata file not found: {serviceId}.yml"
+**Cause:** YAML file missing or wrong naming
+**Solution:**
+- Verify file exists: `src/main/resources/docs-metadata/{serviceId}.yml`
+- Check file name matches serviceId exactly (e.g., `farmers_registry.yml`)
+- Rebuild JAR after adding YAML: `mvn clean package`
+- Check JAR contents: `jar tf doc-submitter-8.1-SNAPSHOT.jar | grep yml`
+
 ### "ClassNotFoundException: ServicesYamlGenerator"
 **Solution:** Compile first: `mvn compile`
 
-### "Failed to load services.yml"
-**Solution:** Check paths in plugin configuration match actual file locations
+### "Failed to load configuration"
+**Solution:**
+- Check YAML syntax is valid
+- Verify `service.id` in YAML matches file name
+- Check console logs for specific error messages
 
 ### "Field not mapping correctly"
-**Solution:** Check field name in services.yml matches Joget form field ID exactly (case-sensitive)
+**Solution:**
+- Check field name in `{serviceId}.yml` matches Joget form field ID exactly (case-sensitive)
+- Enable "Log JSON Payload" in DocSubmitter config to see what's being sent
+- Compare field paths with GovStack JSON structure
 
-### "Validation rule not triggering"
-**Solution:** Check condition syntax in validation-rules.yaml matches field values exactly
+### HTTP 401 Unauthorized
+**Solution:**
+- Regenerate API key on receiver
+- Update DocSubmitter configuration with new API ID and API Key
+- Test with curl to verify credentials
+
+## Version History
+
+- **8.1-SNAPSHOT**: Current development version
+  - **Multi-Service Architecture** - Reads serviceId from workflow variables
+  - **Convention-Based YAML Loading** - Automatically loads `{serviceId}.yml`
+  - **Package Renaming** - `global.govstack.farmreg.registration` → `global.govstack.registration.sender`
+  - **Generic Terminology** - Removed all "farmer" references from plugin code
+  - **ServiceId Validation** - Validates serviceId from workflow variables
+  - **Dynamic Metadata Loading** - YamlMetadataService supports multiple services
+
+## Documentation
+
+- **[CONFIGURATION_GUIDE.md](../CONFIGURATION_GUIDE.md)** - Complete deployment and configuration guide
+- **[README-GENERATORS.md](README-GENERATORS.md)** - Configuration generators quick start
+- **[END_TO_END_SERVICE_CONFIGURATION.md](../END_TO_END_SERVICE_CONFIGURATION.md)** - Complete 9-phase walkthrough
+- **[GENERATOR_USAGE.md](GENERATOR_USAGE.md)** - Detailed generator usage
 
 ## License
 
 Part of the GovStack Registration Building Block initiative.
+https://www.govstack.global
 
-## Support
+---
 
-For issues and questions, please use the GitHub issue tracker.
+**Version**: 8.1-SNAPSHOT
+**Package**: `global.govstack.registration.sender`
+**Last Updated**: October 28, 2025
+**Architecture**: Multi-Service Support (Transport-Layer Only)
